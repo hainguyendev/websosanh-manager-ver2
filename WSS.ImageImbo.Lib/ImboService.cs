@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Net.Mime;
 using System.Runtime.InteropServices;
@@ -13,14 +14,17 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Windows.Forms;
+using System.Windows.Forms.VisualStyles;
 
 namespace WSS.ImageImbo.Lib
 {
-    public class ImboService
+    public class ImboService : IImboService
     {
-        private static string ToHexString(byte[] array)
+
+
+        private string ToHexString(byte[] array)
         {
-            StringBuilder hex = new StringBuilder(array.Length * 2);
+            StringBuilder hex = new StringBuilder(array.Length*2);
             foreach (byte b in array)
             {
                 hex.AppendFormat("{0:x2}", b);
@@ -28,7 +32,7 @@ namespace WSS.ImageImbo.Lib
             return hex.ToString();
         }
 
-        private static string CreateToken(string message, string secret)
+        private string CreateToken(string message, string secret)
         {
             secret = secret ?? "";
             var encoding = new ASCIIEncoding();
@@ -40,7 +44,8 @@ namespace WSS.ImageImbo.Lib
                 return ToHexString(hashmessage);
             }
         }
-        private static bool ContainsTransparent(Bitmap image)
+
+        private bool ContainsTransparent(Bitmap image)
         {
             for (int y = 0; y < image.Height; ++y)
             {
@@ -55,10 +60,10 @@ namespace WSS.ImageImbo.Lib
             return false;
         }
 
-        public static string PostImgToImboChangeBackgroundTransference(string url, string publicKey, string privateKey, string userName, string host, int port)
+        public string PostImgWithChangeTransference(string url, string publicKey, string privateKey, string userName, string host, int port)
         {
             if (!url.ToLower().Contains(".png"))
-                return PostImageToImbo(url, publicKey, privateKey, userName, host, port);
+                return PostImgToImbo(url, publicKey, privateKey, userName, host, port);
 
 
             string dir = Path.GetTempPath();
@@ -71,7 +76,7 @@ namespace WSS.ImageImbo.Lib
                 url = url.Substring(url.LastIndexOf("http", StringComparison.Ordinal));
             else if (regexhttp.Count == 0)
                 url = "http://" + url;
-            var requestdownload = (HttpWebRequest)WebRequest.Create(url);
+            var requestdownload = (HttpWebRequest) WebRequest.Create(url);
             requestdownload.Credentials = CredentialCache.DefaultCredentials;
             requestdownload.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.124 Safari/537.36";
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls
@@ -81,15 +86,14 @@ namespace WSS.ImageImbo.Lib
             ServicePointManager
                 .ServerCertificateValidationCallback +=
                 (sender, cert, chain, sslPolicyErrors) => true;
-            var responseImageDownload = (HttpWebResponse)requestdownload.GetResponse();
+            var responseImageDownload = (HttpWebResponse) requestdownload.GetResponse();
             var streamImageDownload = responseImageDownload.GetResponseStream();
             Image myImage = System.Drawing.Image.FromStream(streamImageDownload);
 
-          
+
             using (var b = new Bitmap(myImage.Width, myImage.Height))
             {
                 b.SetResolution(myImage.HorizontalResolution, myImage.VerticalResolution);
-
                 using (var g = Graphics.FromImage(b))
                 {
                     g.Clear(Color.White);
@@ -98,14 +102,14 @@ namespace WSS.ImageImbo.Lib
                 b.Save(pathTemp, ImageFormat.Png);
 
             }
-           
+
             // Imbo
             string urlQuery = host + ":" + port + @"/users/" + userName + @"/images";
             string strDate = DateTime.Now.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
             string str = "POST" + "|" + host + ":" + port + @"/users/" + userName + @"/images" + "|" + publicKey + "|" + strDate;
             var signleData = CreateToken(str, privateKey);
 
-            var request = (HttpWebRequest)WebRequest.Create(urlQuery);
+            var request = (HttpWebRequest) WebRequest.Create(urlQuery);
             request.Headers.Add("X-Imbo-PublicKey", publicKey);
             request.Headers.Add("X-Imbo-Authenticate-Timestamp", strDate);
             request.Headers.Add("X-Imbo-Authenticate-Signature", signleData);
@@ -136,9 +140,9 @@ namespace WSS.ImageImbo.Lib
             return idImageNew;
         }
 
-      
 
-        public static string PostImageToImbo(string url, string publicKey, string privateKey, string userName, string host, int port)
+
+        public string PostImgToImbo(string url, string publicKey, string privateKey, string userName, string host, int port)
         {
             string idImageNew = "";
             //download image
@@ -148,7 +152,7 @@ namespace WSS.ImageImbo.Lib
                 url = url.Substring(url.LastIndexOf("http", StringComparison.Ordinal));
             else if (regexhttp.Count == 0)
                 url = "http://" + url;
-            var requestdownload = (HttpWebRequest)WebRequest.Create(url);
+            var requestdownload = (HttpWebRequest) WebRequest.Create(url);
             requestdownload.Credentials = CredentialCache.DefaultCredentials;
             requestdownload.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.124 Safari/537.36";
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls
@@ -158,16 +162,17 @@ namespace WSS.ImageImbo.Lib
             ServicePointManager
                 .ServerCertificateValidationCallback +=
                 (sender, cert, chain, sslPolicyErrors) => true;
-            var responseImageDownload = (HttpWebResponse)requestdownload.GetResponse();
+            var responseImageDownload = (HttpWebResponse) requestdownload.GetResponse();
             var streamImageDownload = responseImageDownload.GetResponseStream();
 
             // Imbo
             string urlQuery = host + ":" + port + @"/users/" + userName + @"/images";
             string strDate = DateTime.Now.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
-            string str = "POST" + "|" + host + ":" + port + @"/users/" + userName + @"/images" + "|" + publicKey + "|" + strDate;
+
+            string str = "POST" + "|" + host + ((port != 443) ? (":" + port) : "") + @"/users/" + userName + @"/images" + "|" + publicKey + "|" + strDate;
             var signleData = CreateToken(str, privateKey);
 
-            var request = (HttpWebRequest)WebRequest.Create(urlQuery);
+            var request = (HttpWebRequest) WebRequest.Create(urlQuery);
             request.Headers.Add("X-Imbo-PublicKey", publicKey);
             request.Headers.Add("X-Imbo-Authenticate-Timestamp", strDate);
             request.Headers.Add("X-Imbo-Authenticate-Signature", signleData);
@@ -193,5 +198,38 @@ namespace WSS.ImageImbo.Lib
             }
             return idImageNew;
         }
+
+        public void DeleteImg(string publicKey, string privateKey, string imageId, string userName, string host, int port)
+        {
+            ServicePointManager
+                .ServerCertificateValidationCallback +=
+                (sender, cert, chain, sslPolicyErrors) => true;
+
+            string urlQuery = host + ":" + port + @"/users/" + userName + @"/images" + "/" + imageId;
+            string strDate = DateTime.Now.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+            string str = "DELETE" + "|" + host + @"/users/" + userName + @"/images" + "/" + imageId + "|" + "wss" + "|" + strDate;
+            var signleData = CreateToken(str, privateKey);
+
+
+            var request = WebRequest.Create(urlQuery);
+            request.Headers.Add("X-Imbo-PublicKey", "wss");
+            request.Headers.Add("X-Imbo-Authenticate-Timestamp", strDate);
+            request.Headers.Add("X-Imbo-Authenticate-Signature", signleData);
+            request.ContentType = "application/json";
+            request.Method = "DELETE";
+
+
+            using (var stream = (HttpWebResponse) request.GetResponse())
+            {
+                Stream x = stream.GetResponseStream();
+                var y = new StreamReader(x);
+                var mss = y.ReadToEnd();
+                dynamic d = JObject.Parse(mss);
+
+            }
+        }
+
+
     }
 }
+
